@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WILLOWSUN Weather App</title>
+
+<style>
+* { box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI', sans-serif; }
+
+body {
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  min-height: 100vh;
+  color:#111;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+
+body::before { content:""; position:fixed; inset:0; background:rgba(0,0,0,0.15); z-index:-1; }
+body.dark::before { background:rgba(0,0,0,0.3); }
+
+.container {
+  width:100%;
+  max-width:550px;
+  padding:2rem;
+  background:rgba(255,255,255,0.85);
+  border-radius:15px;
+  border:2px solid rgba(255,255,255,0.6);
+  box-shadow:0 15px 35px rgba(0,0,0,0.3);
+  text-align:center;
+  position:relative;
+}
+.container.dark { background:rgba(0,0,0,0.75); color:#eee; border-color:rgba(255,255,255,0.3); }
+
+h1 { margin-bottom:1rem; display:flex; align-items:center; justify-content:center; font-size:1.8rem; }
+h1 img { width:40px; margin-right:10px; }
+
+.search-box { position:relative; display:flex; justify-content:center; margin-bottom:1rem; }
+.search-box input {
+  width:70%;
+  padding:0.7rem 2.5rem 0.7rem 2.5rem;
+  border-radius:5px;
+  border:none;
+  font-size:1rem;
+  background-image: url('https://cdn-icons-png.flaticon.com/512/869/869869.png'); /* sun icon */
+  background-size:20px;
+  background-repeat:no-repeat;
+  background-position:10px center;
+}
+
+button { padding:0.7rem 1rem; background:#0077ff; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px; }
+
+.weather-icon { width:100px; margin:10px 0; }
+
+.details { margin-top:1rem; font-size:1rem; }
+.details p { margin:5px 0; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:500; }
+.details p img { width:25px; height:25px; }
+
+.toggle { margin-top:1rem; cursor:pointer; text-decoration:underline; font-size:0.9rem; }
+
+.loader { margin:1rem auto; border:5px solid #f3f3f3; border-top:5px solid #0077ff; border-radius:50%; width:35px; height:35px; animation:spin 1s linear infinite; display:none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error { color:red; margin-top:1rem; }
+
+.chatbox-container {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.chatbox-container h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+}
+
+.chatbox {
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  background: rgba(240,240,240,0.9);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  text-align: left;
+}
+
+.container.dark .chatbox {
+  background: rgba(50,50,50,0.8);
+  color: #eee;
+}
+
+.bot-msg, .user-msg {
+  padding: 5px 10px;
+  margin: 5px 0;
+  border-radius: 10px;
+  max-width: 90%;
+}
+
+.bot-msg { background: #0077ff; color: #fff; }
+.user-msg { background: #ddd; color: #111; text-align: right; }
+
+.chatbox-container input {
+  width: 70%;
+  padding: 0.5rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.chatbox-container button {
+  padding: 0.5rem 1rem;
+  margin-left: 5px;
+  border-radius: 5px;
+  border: none;
+  background: #0077ff;
+  color: #fff;
+  cursor: pointer;
+}
+
+@media(max-width:600px) {
+  .search-box input { width:100%; }
+  h1 { font-size:1.5rem; flex-direction:column; }
+  h1 img { margin-bottom:5px; }
+}
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+<h1>
+  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_q0EprVAP9ZK02w7AuzgcIiRivSzoWLxTuA&s" alt="Weather Logo">
+  WILLOWSUN
+</h1>
+
+<div class="search-box">
+  <input type="text" id="cityInput" placeholder="Enter city name">
+  <button onclick="getWeather()">Search</button>
+</div>
+
+<div class="loader" id="loader"></div>
+<div id="currentWeather"></div>
+<div class="error" id="error"></div>
+
+<div class="toggle" onclick="toggleMode()">🌤 Change Background</div>
+
+<!-- Chatbox Section -->
+<div class="chatbox-container">
+  <h3>Weather Info Chat</h3>
+  <div class="chatbox" id="chatbox">
+    <div class="bot-msg">Hello! Ask me about weather for any city in the world.</div>
+  </div>
+  <input type="text" id="chatInput" placeholder="Type your question..." onkeypress="if(event.key==='Enter'){askChat();}">
+  <button onclick="askChat()">Send</button>
+</div>
+
+</div>
+
+<script>
+const API_KEY = "ec31f45c62425f606f9abe458f811b2c";
+
+// Backgrounds
+const backgrounds = [
+  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=100",
+  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1920&q=100",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ058oQxJF683rP7THAlMMcaorO0hRTbg6Oxg&s",
+  "https://media.istockphoto.com/id/612023744/photo/blue-and-orange-sunset-sky.jpg?s=612x612&w=0&k=20&c=bqPHaI4d3ghIbLIwtbTDPxV8QQ2pIN2mbCfzLb7gucQ="
+];
+
+let bgIndex = 0;
+document.body.style.backgroundImage = `url('${backgrounds[0]}')`;
+
+function toggleMode() {
+  bgIndex = (bgIndex + 1) % backgrounds.length;
+  document.body.style.backgroundImage = `url('${backgrounds[bgIndex]}')`;
+  document.body.classList.toggle("dark");
+  document.getElementById("app").classList.toggle("dark");
+}
+
+// Weather API
+async function getWeather() {
+  const city = document.getElementById("cityInput").value.trim();
+  if(!city) return;
+  document.getElementById("loader").style.display = "block";
+  document.getElementById("error").textContent = "";
+  try {
+    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`);
+    if(!res.ok) throw new Error("City not found");
+    const data = await res.json();
+    showCurrentWeather(data);
+  } catch(err) {
+    document.getElementById("error").textContent = err.message;
+  } finally { document.getElementById("loader").style.display = "none"; }
+}
+
+function showCurrentWeather(data) {
+  document.getElementById("currentWeather").innerHTML = `
+    <h2>${data.name}</h2>
+    <img src="https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png" class="weather-icon">
+    <div class="details">
+      <p><img src="https://cdn-icons-png.flaticon.com/512/1146/1146869.png"> ${data.main.temp}°C</p>
+      <p><img src="https://cdn-icons-png.flaticon.com/512/728/728093.png"> ${data.main.humidity}%</p>
+      <p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANgAAADpCAMAAABx2AnXAAAAyVBMVEX///8AAAAvQY3a2tooO4oeNIgsPowSLYUgNoipr8xibqZlcacqPYtodKkmOoqiqcmfn5+lpaUXMIb29/rY2ubQ0+Osssx+fn7ExMSGhoaYmJjd4Orv8PYAIIGQmL6WncJMW500NDQ8PDyzs7N8hbPl5/DLz+FbaaWepMYjIyNVVVUSEhK4uLjBwcFoaGiQkJBwcHC+w9hEUpgAJoLCxto6SpLh4eE3NzcbGxvR0dFJSUlfX19FRUVTU1ODirRIVpgADHwAE350f7AQSi7MAAAIO0lEQVR4nO2bC3uaShCGs4QFvAGCYESiRsRL4g2VtMREW///jzq7C4mCpnpajZBn3qRNBGzncy8zOzt7cwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABcBV23bV2/thXnRvc2ayzOtVnH+1bacr4mCxxBkDVfubY1Z8NuaUxViIDX9WtbdB5cTuZi8Jp3bZvOge4Xo6YiRL99C2UFOWombj3jsBx1R+PaZv0znsik4JJBpkPd2GjsZdHP/OS4Ym2EzffXC571R9y4plHnoIGJDC23veBKAuuM9vVsOguuLPFafveKwXqj1N9/1vZWvZk/KzWNLHTUeqfXjNu5kugoayUf1BucJhfJ1MlLYstM3s0CrsSazI1fXQjS1o0XtUx68R5Px90idk2Z70QnzD1ksNHYTIlzu5dyIpdAEHOfvT+1KDg5e4QTCsfJWJKwxocvxMzFJ/vCZizs4uWO4equVwiDZiE5DFPPXlc0WEfkPyaMBccajc8ffHt6adH2EbvbC10qTOC2XsENI+fdZzJAOKCE3dDDl4XifDcwtplL4Htfbds/kef3ulk9L83iU4XJ1GtZGmWRyQk3tRdE+XQCwRmaGBdz1hG5Y8/1aWeUO19h0jmwWbRPpoWjcQWbKbMyLxorQQod8fFZwdUOhsrpQ180BC1K6xS546sxF6demO5WcquWGKUWqblS5fi7KrQrFtM539t1w+t3erOihuXiNrzF3Am6bnK0xeTNxY08EdutGJ5p9lellk/jWU0ia8fdmJ3HeHXS+pitbfCXRvi67br1esVYeGau32ysVp1Nodea+bJ4/+vXr9+/f9/f38/nc/EA2M/3T/O5LMritC9cbpIRYxjd7oLS/cCIIPcqW+oJXPvkZAbzz8XZJZVchY2UzRXZEUjoyGbP9bUNOSt1sxBlwrVsrVo+R694zbwvRbI4LdvZYt22XcNTmpsWPxc1if9wDrh">
+      ${data.wind.speed} m/s</p>
+      <p><img src="https://cdn-icons-png.flaticon.com/512/1163/1163661.png"> ${data.weather[0].description}</p>
+    </div>
+  `;
+}
+
+// Chatbox with real-time weather
+async function askChat() {
+  const input = document.getElementById("chatInput");
+  const userQuery = input.value.trim();
+  if (!userQuery) return;
+
+  const chatbox = document.getElementById("chatbox");
+
+  // Show user's message
+  const userMsg = document.createElement("div");
+  userMsg.className = "user-msg";
+  userMsg.textContent = userQuery;
+  chatbox.appendChild(userMsg);
+  chatbox.scrollTop = chatbox.scrollHeight;
+
+  // Extract city from query (simplest: last word)
+  const words = userQuery.split(" ");
+  const city = words[words.length - 1];
+
+  // Determine type
+  const qLower = userQuery.toLowerCase();
+  let type = "condition"; // default
+  if(qLower.includes("temperature") || qLower.includes("temp")) type = "temp";
+  else if(qLower.includes("humidity")) type = "humidity";
+  else if(qLower.includes("wind")) type = "wind";
+  else if(qLower.includes("weather") || qLower.includes("forecast")) type = "condition";
+
+  try {
+    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`);
+    if(!res.ok) throw new Error("City not found");
+    const data = await res.json();
+
+    let answer = "";
+    switch(type) {
+      case "temp": answer = `Temperature in ${data.name} is ${data.main.temp}°C.`; break;
+      case "humidity": answer = `Humidity in ${data.name} is ${data.main.humidity}%.`; break;
+      case "wind": answer = `Wind speed in ${data.name} is ${data.wind.speed} m/s.`; break;
+      case "condition": answer = `Weather in ${data.name}: ${data.weather[0].description}.`; break;
+    }
+
+    const botMsg = document.createElement("div");
+    botMsg.className = "bot-msg";
+    botMsg.textContent = answer;
+    chatbox.appendChild(botMsg);
+    chatbox.scrollTop = chatbox.scrollHeight;
+
+  } catch(err) {
+    const botMsg = document.createElement("div");
+    botMsg.className = "bot-msg";
+    botMsg.textContent = "Sorry, I couldn't find the weather for that city.";
+    chatbox.appendChild(botMsg);
+    chatbox.scrollTop = chatbox.scrollHeight;
+  }
+
+  input.value = "";
+}
+</script>
+
+</body>
+</html>
+
+
